@@ -1,0 +1,38 @@
+# Chronos Gateway Configuration
+
+HTTP:
+  Port: ":8080"  # HTTP server port
+
+GRPC:
+  Port: ":50051"  # gRPC server port
+
+Kafka:
+  Brokers:
+    - "localhost:9092"
+  # For local development with no Kafka, messages will be logged
+  # Set to true if you don't have Kafka running locally
+  DevelopmentMode: true
+
+MinIO:
+  Endpoint: "localhost:9000"
+  AccessKey: "minioadmin"
+  SecretKey: "minioadmin"
+  Bucket: "chronos-uploads"
+  # For local development with no MinIO, files will be saved to disk
+  # Set to true if you don't have MinIO running locally
+  DevelopmentMode: true
+  LocalStoragePath: "./storage"
+
+# API Keys for authentication
+# Use these keys for testing
+APIKeys:
+  "test-key-1": true
+  "test-key-2": true
+# Disable auth for local development
+# Set to true if you want to bypass authentication
+DisableAuth: true
+
+# Metrics collection settings
+Metrics:
+  Enable: true
+  Endpoint: "/metrics" 
