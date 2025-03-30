@@ -11,7 +11,7 @@ Kafka:
     - "localhost:9092"
   # For local development with no Kafka, messages will be logged
   # Set to true if you don't have Kafka running locally
-  DevelopmentMode: true
+  DevelopmentMode: false
 
 MinIO:
   Endpoint: "localhost:9000"
