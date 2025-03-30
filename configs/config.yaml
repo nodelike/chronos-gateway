@@ -8,7 +8,8 @@ GRPC:
 
 Kafka:
   Brokers:
-    - "localhost:9092"
+    - "kafka:9092"  # When running in Docker, use the service name
+    - "localhost:9092"  # When running locally outside Docker
   # For local development with no Kafka, messages will be logged
   # Set to true if you don't have Kafka running locally
   DevelopmentMode: false

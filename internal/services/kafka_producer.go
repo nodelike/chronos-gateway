@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/IBM/sarama"
 )
@@ -35,17 +36,66 @@ func NewKafkaProducer(brokers []string, developmentMode bool) *KafkaProducer {
 	// Configure Kafka producer
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
-	producer, err := sarama.NewAsyncProducer(brokers, config)
+	config.Producer.Return.Errors = true
+	config.ClientID = "chronos-gateway"
 
-	if err != nil {
-		log.Printf("Error creating Kafka producer: %v", err)
-		log.Println("Falling back to development mode - messages will be logged")
+	// Add retry logic with a shorter timeout
+	config.Net.DialTimeout = 5 * time.Second
+	config.Net.ReadTimeout = 5 * time.Second
+	config.Net.WriteTimeout = 5 * time.Second
+
+	// Try each broker until one works
+	var connectedBrokers []string
+	var producer sarama.AsyncProducer
+	var err error
+
+	log.Printf("[KAFKA] Attempting to connect to brokers: %v", brokers)
+
+	// First try all brokers together
+	producer, err = sarama.NewAsyncProducer(brokers, config)
+	if err == nil {
+		log.Printf("[KAFKA] Successfully connected to brokers: %v", brokers)
+	} else {
+		log.Printf("[KAFKA] Error connecting to all brokers together: %v", err)
+		log.Println("[KAFKA] Will try each broker individually")
+
+		// Try each broker individually
+		for _, broker := range brokers {
+			singleBroker := []string{broker}
+			producer, err = sarama.NewAsyncProducer(singleBroker, config)
+			if err == nil {
+				log.Printf("[KAFKA] Successfully connected to broker: %s", broker)
+				connectedBrokers = append(connectedBrokers, broker)
+				break
+			} else {
+				log.Printf("[KAFKA] Failed to connect to broker %s: %v", broker, err)
+			}
+		}
+	}
+
+	// If all connection attempts failed, fall back to development mode
+	if err != nil || producer == nil {
+		log.Printf("[KAFKA] Error creating Kafka producer: %v", err)
+		log.Println("[KAFKA] Falling back to development mode - messages will be logged")
 		return &KafkaProducer{
 			producer:        nil,
 			topicMap:        topicMap,
 			developmentMode: true,
 		}
 	}
+
+	// Start a goroutine to handle success and error messages
+	go func() {
+		for {
+			select {
+			case success := <-producer.Successes():
+				log.Printf("[KAFKA] Successfully sent message to topic %s partition %d offset %d",
+					success.Topic, success.Partition, success.Offset)
+			case err := <-producer.Errors():
+				log.Printf("[KAFKA] Failed to send message: %v", err)
+			}
+		}
+	}()
 
 	return &KafkaProducer{
 		producer:        producer,
@@ -76,6 +126,7 @@ func (kp *KafkaProducer) SendEvent(source string, event []byte) {
 	}
 
 	// Send to Kafka in production mode
+	log.Printf("[KAFKA] Sending message to topic %s", topic)
 	kp.producer.Input() <- &sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(event),
